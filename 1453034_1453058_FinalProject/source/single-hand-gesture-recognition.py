@@ -1,18 +1,34 @@
 import numpy as np
 import cv2
 import sys
+from svm import *
+import os
 
 MIN_H_SKIN = (0, 10, 60)
 MAX_H_SKIN = (20, 150, 255)
 
+svm=cv2.ml.SVM_load('svm_data.dat')
+
 stateSize = 6
 measSize = 4
-contrSize = 0 
+contrSize = 0
 type_init = np.float32
 type = cv2.CV_32F
+bin_n=16
+#http://answers.opencv.org/question/150999/opencv-32-python-svm-problem/
+def hog(img):
+    gx = cv2.Sobel(img, cv2.CV_32F, 1, 0)
+    gy = cv2.Sobel(img, cv2.CV_32F, 0, 1)
+    mag, ang = cv2.cartToPolar(gx, gy)
+    bins = np.int32(bin_n*ang/(2*np.pi))    # quantizing binvalues in (0...16)
+    bin_cells = bins[:10,:10], bins[10:,:10], bins[:10,10:], bins[10:,10:]
+    mag_cells = mag[:10,:10], mag[10:,:10], mag[:10,10:], mag[10:,10:]
+    hists = [np.bincount(b.ravel(), m.ravel(), bin_n) for b, m in zip(bin_cells, mag_cells)]
+    hist = np.hstack(hists)     # hist is a 64 bit vector
+    return hist
 
 kf = cv2.KalmanFilter(stateSize, measSize, contrSize, type)
-state = np.zeros((stateSize, 1), type_init); 
+state = np.zeros((stateSize, 1), type_init);
 meas = np.zeros((measSize, 1), type_init)
 cv2.setIdentity(kf.transitionMatrix)
 
@@ -27,17 +43,18 @@ kf.processNoiseCov[1][1] = 1e-2
 kf.processNoiseCov[2][2] = 2.0
 kf.processNoiseCov[3][3] = 1.0
 kf.processNoiseCov[4][5] = 1e-2
-kf.processNoiseCov[5][5] = 1e-2 
+kf.processNoiseCov[5][5] = 1e-2
 
 cv2.setIdentity(kf.measurementNoiseCov, (1e-1))
 
 cap = cv2.VideoCapture(0)
+#cap = cv2.VideoCapture("rtsp://192.168.1.254/sjcam.mov")
 if not cap.isOpened:
-    print "Webcam not connected. \n"
+    print ("Webcam not connected. \n")
     sys.exit()
 
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1024)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 768)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 
 found = False
 res = None
@@ -48,25 +65,25 @@ notFoundCount = 0
 while(True):
     # Capture frame-by-frame
     ret, frame = cap.read()
-
+    if frame is None:
+    	continue
     res = frame.copy()
-
     precTick = ticks
     ticks = cv2.getTickCount()
     dT = (ticks - precTick) / cv2.getTickFrequency()
     if found:
         kf.transitionMatrix[2] = dT
         kf.transitionMatrix[3] = dT
- 
-        print "dT: ", dT
- 
+
+        # print ("dT: ", dT)
+
         state = kf.predict()
-        print "State post: "
-        print state            
-        
-        cv2.circle(res, (int(state[0][0]), int(state[1][0])), 2, (255, 0, 0), -1);            
+        # print ("State post: ")
+        # print (state)
+
+        cv2.circle(res, (int(state[0][0]), int(state[1][0])), 2, (255, 0, 0), -1);
         cv2.rectangle(res, (int(state[0][0] - state[4][0] / 2), int(state[1][0] - state[5][0] / 2)), (int(state[0][0] + state[4][0] / 2), int(state[1][0] + state[5][0] / 2)), (255, 0, 0), 2)
-    
+
     blur = cv2.GaussianBlur(frame, (5, 5), 3.0, 3.0)
     frmHsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
 
@@ -84,16 +101,26 @@ while(True):
         ratio = float(w) / h
         if ratio > 1.0:
             ratio = 1.0 / ratio
- 
-        if ratio > 0.75 and w * h >= 100000:
+
+        if ratio > 0.75 and w * h >= 90000:
             hands.append(contours[i])
             handsBox.append([x, y, w, h])
+            #cv2.drawContours(im2, contours[i], -1, (0,255,0), 3)
+            crop_img = rangeRes[y:y+h, x:x+w]
+            crop_img = cv2.resize(crop_img,(500, 500), interpolation = cv2.INTER_CUBIC)
+            cv2.imshow("cropped", crop_img)
+            test=hog(crop_img)
+            test1 = np.float32(test).reshape(-1,64)
+            y=svm.predict(test1)
+            os.system('cls')
+            print ('-------------',y[1])
 
-    print "Hands found: ", len(handsBox)
+
+    # print ("Hands found: ", len(handsBox))
     for i in range(len(hands)):
         cv2.drawContours(res, hands, i, (20,150,20), 1)
         cv2.rectangle(res, (handsBox[i][0], handsBox[i][1]), (handsBox[i][0] + handsBox[i][2], handsBox[i][1] + handsBox[i][3]), (0, 255, 0), 2)
-        
+
         center = (int(handsBox[i][0] + handsBox[i][2] / 2.), int(handsBox[i][1] + handsBox[i][3] / 2.))
         cv2.circle(res, center, 2, (20, 150, 20), -1)
 
@@ -102,7 +129,7 @@ while(True):
 
     if len(hands) == 0:
         notFoundCount += 1
-        print "notFoundCount: ", notFoundCount
+        # print ("notFoundCount: ", notFoundCount)
         if notFoundCount >= 10:
             found = False
         else:
@@ -121,7 +148,7 @@ while(True):
         meas[1][0] = maxHandsBox[1] + maxHandsBox[3] / 2.
         meas[2][0] = maxHandsBox[2]
         meas[3][0] = maxHandsBox[3]
-        
+
         if not found:
             kf.errorCovPre[0][0] = 1.
             kf.errorCovPre[1][1] = 1.
@@ -129,22 +156,22 @@ while(True):
             kf.errorCovPre[3][3] = 1.
             kf.errorCovPre[4][5] = 1.
             kf.errorCovPre[5][5] = 1.
- 
+
             state[0][0] = meas[0][0]
             state[1][0] = meas[1][0]
             state[2][0] = 0.
             state[3][0] = 0.
             state[4][0] = meas[2][0]
             state[5][0] = meas[3][0]
-            
+
             kf.statePost = state
 
             found = True
         else:
             kf.correct(meas)
-        print "Measure matrix:"
-        print meas
-    
+        # print ("Measure matrix:")
+        # print (meas)
+
     cv2.imshow("Result", res)
 
     # frameHLS = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
