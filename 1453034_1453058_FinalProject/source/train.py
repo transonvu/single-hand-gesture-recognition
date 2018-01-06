@@ -1,13 +1,27 @@
 import numpy as np
 import cv2
 import sys
-from svmutil import *
 
+SZ = 20
 samples = []
 num=1
 trueValue=1
 labels=[]
 bin_n = 16
+
+def deskew(img):
+    m = cv2.moments(img)
+    if abs(m['mu02']) < 1e-2:
+        # no deskewing needed. 
+        return img.copy()
+    # Calculate skew based on central momemts. 
+    skew = m['mu11']/m['mu02']
+    # Calculate affine transform to correct skewness. 
+    M = np.float32([[1, skew, -0.5*SZ*skew], [0, 1, 0]])
+    # Apply affine transform
+    img = cv2.warpAffine(img, M, (SZ, SZ), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
+    return img
+
 def hog(img):
     gx = cv2.Sobel(img, cv2.CV_32F, 1, 0)
     gy = cv2.Sobel(img, cv2.CV_32F, 0, 1)
@@ -23,60 +37,27 @@ while (num<=1000):
     MIN_H_SKIN = (0, 10, 60)
     MAX_H_SKIN = (20, 150, 255)
 
-    stateSize = 6
-    measSize = 4
-    contrSize = 0
-    type_init = np.float32
-    type = cv2.CV_32F
-
-    kf = cv2.KalmanFilter(stateSize, measSize, contrSize, type)
-    state = np.zeros((stateSize, 1), type_init);
-    meas = np.zeros((measSize, 1), type_init)
-    cv2.setIdentity(kf.transitionMatrix)
-
-    kf.measurementMatrix = np.zeros((measSize, stateSize), type_init)
-    kf.measurementMatrix[0][0] = 1.0
-    kf.measurementMatrix[1][1] = 1.0
-    kf.measurementMatrix[2][4] = 1.0
-    kf.measurementMatrix[3][5] = 1.0
-
-    kf.processNoiseCov[0][0] = 1e-2
-    kf.processNoiseCov[1][1] = 1e-2
-    kf.processNoiseCov[2][2] = 2.0
-    kf.processNoiseCov[3][3] = 1.0
-    kf.processNoiseCov[4][5] = 1e-2
-    kf.processNoiseCov[5][5] = 1e-2
-
-    cv2.setIdentity(kf.measurementNoiseCov, (1e-1))
-
-    found = False
-    res = None
-    blur = None
-    frmHsv = None
-    ticks = 0
-    notFoundCount = 0
     if trueValue*200+1 == num:
         trueValue= trueValue+1
-    name  = 'mytrain/1001_'+str(trueValue)+'_'+str(num)+'.png'
+
+    name  = 'images/1001_'+str(trueValue)+'_'+str(num)+'.png'
     print (name)
     res = cv2.imread(name,0)
-    #cv2.imshow('image',res)
-    precTick = ticks
-    ticks = cv2.getTickCount()
-    dT = (ticks - precTick) / cv2.getTickFrequency()
-    res, contours, hierarchy = cv2.findContours(res, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    hands = []
-    handsBox = []
+    im2, contours, hierarchy = cv2.findContours(res, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    max_area = -1
+    max_area_index = -1
+    for i in range(len(contours)):
+        contour_area = cv2.contourArea(contours[i])
+        if contour_area > max_area:
+            max_area = contour_area
+            max_area_index = i
+    if max_area != -1:
+        x, y, w, h = cv2.boundingRect(contours[max_area_index])
+        crop_img = res[y:y+h, x:x+w]
+        crop_img = cv2.resize(crop_img,(500, 500), interpolation = cv2.INTER_CUBIC)
+        # cv2.imshow("cropped", crop_img)
+        # cv2.waitKey(0)
 
-    x, y, w, h = cv2.boundingRect(contours[0])
-    hands.append(contours[0])
-    handsBox.append([x, y, w, h])
-    #cv2.drawContours(im2, contours[i], -1, (0,255,0), 3)
-    crop_img = res[y:y+h, x:x+w]
-    crop_img = cv2.resize(crop_img,(500, 500), interpolation = cv2.INTER_CUBIC)
-    thresh = 1
-    crop_img = cv2.threshold(crop_img, thresh, 255, cv2.THRESH_BINARY)[1]
-    cv2.imshow("cropped", crop_img)
     hist = hog(crop_img)
     samples.append(hist)
     labels.append(trueValue)
@@ -96,13 +77,3 @@ svm.setGamma(5.383)
 
 svm.train(samples, cv2.ml.ROW_SAMPLE,labels)
 svm.save('svm_data.dat')
-
-k = cv2.waitKey(0)
-if k == 27:         # wait for ESC key to exit
-    cv2.destroyAllWindows()
-elif k == ord('s'): # wait for 's' key to save and exit
-    cv2.imwrite('messigray.png',img)
-    cv2.destroyAllWindows()
-
-# When everything done, release the capture
-cv2.destroyAllWindows()
