@@ -6,6 +6,7 @@ from svm import *
 
 SZ = 20
 bin_n = 16
+NUMFARMECHANGE = 10
 
 cascadePath = "haarcascade_frontalface_default.xml"
 faceCascade = cv2.CascadeClassifier(cascadePath)
@@ -13,9 +14,9 @@ faceCascade = cv2.CascadeClassifier(cascadePath)
 svm = cv2.ml.SVM_load('svm_data.dat')
 cap = cv2.VideoCapture(0)
 if not cap.isOpened:
-    print "Webcam not connected. \n"
+    print ("Webcam not connected. \n")
     sys.exit()
-    
+
 def face_detection(frame):
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = faceCascade.detectMultiScale(gray_frame, minSize=(120, 120))
@@ -32,11 +33,11 @@ def face_detection(frame):
 def deskew(img):
     m = cv2.moments(img)
     if abs(m['mu02']) < 1e-2:
-        # no deskewing needed. 
+        # no deskewing needed.
         return img.copy()
-    # Calculate skew based on central momemts. 
+    # Calculate skew based on central momemts.
     skew = m['mu11']/m['mu02']
-    # Calculate affine transform to correct skewness. 
+    # Calculate affine transform to correct skewness.
     M = np.float32([[1, skew, -0.5*SZ*skew], [0, 1, 0]])
     # Apply affine transform
     img = cv2.warpAffine(img, M, (SZ, SZ), flags=cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR)
@@ -52,10 +53,12 @@ def hog(img):
     hists = [np.bincount(b.ravel(), m.ravel(), bin_n) for b, m in zip(bin_cells, mag_cells)]
     hist = np.hstack(hists)     # hist is a 64 bit vector
     return hist
-
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+result = []
 while(True):
     ret, frame = cap.read()
-    
+
     # Smoothing image
     blur = cv2.GaussianBlur(frame, (5, 5), 3.0, 3.0)
 
@@ -67,10 +70,10 @@ while(True):
     max_skin = (20, 150, 255)
 
     rangeRes = cv2.inRange(hsv_frame, min_skin, max_skin)
-    erode_element = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)) 
-    dilate_element = cv2.getStructuringElement(cv2.MORPH_RECT, (6, 6)) 
+    erode_element = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    dilate_element = cv2.getStructuringElement(cv2.MORPH_RECT, (6, 6))
     rangeRes = cv2.erode(rangeRes, erode_element, iterations = 2)
-    rangeRes = cv2.dilate(rangeRes, dilate_element, iterations = 2)    
+    rangeRes = cv2.dilate(rangeRes, dilate_element, iterations = 2)
 
     if not (face is None):
         rangeRes[face[1]:face[1] + face[3], face[0]:face[0] + face[2]] = 0
@@ -94,8 +97,21 @@ while(True):
         hist = hog(gray_hand)
         feature_vector = np.float32(hist).reshape(-1,64)
         labels = svm.predict(feature_vector)
-        print ('-------------', labels[1])
-
+        result.append(labels[1][0][0])
+        #print ('-------------', labels[1][0][0])
+    if (len(result)>=NUMFARMECHANGE):
+        counts=[]
+        counts.append(result.count(1))
+        counts.append(result.count(2))
+        counts.append(result.count(3))
+        counts.append(result.count(4))
+        counts.append(result.count(5))
+        result = counts.index(max(counts))+1
+        if max(counts)>0.7*NUMFARMECHANGE:
+            print (counts,counts.index(max(counts))+1)
+        else:
+            print (None)
+        result = []
     cv2.imshow('rangeRes', rangeRes)
     cv2.imshow('frame', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
