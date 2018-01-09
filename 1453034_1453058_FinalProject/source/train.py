@@ -1,13 +1,14 @@
 import numpy as np
 import cv2
 import sys
+import math
 
 SZ = 20
 samples = []
 num=1
 trueValue=1
 labels=[]
-bin_n = 16
+bin_n = 8
 
 def deskew(img):
     m = cv2.moments(img)
@@ -26,11 +27,12 @@ def hog(img):
     gx = cv2.Sobel(img, cv2.CV_32F, 1, 0)
     gy = cv2.Sobel(img, cv2.CV_32F, 0, 1)
     mag, ang = cv2.cartToPolar(gx, gy)
-    bins = np.int32(bin_n*ang/(2*np.pi))    # quantizing binvalues in (0...16)
-    bin_cells = bins[:10,:10], bins[10:,:10], bins[:10,10:], bins[10:,10:]
-    mag_cells = mag[:10,:10], mag[10:,:10], mag[:10,10:], mag[10:,10:]
+    bins = np.int32(bin_n*ang/(2*np.pi))
+    bin_cells = bins[:8, :8], bins[:8, 8:16], bins[:8, 16:24], bins[:8, 24:], bins[8:16, :8], bins[8:16, 8:16], bins[8:16, 16:24], bins[8:16, 24:], bins[16:24, :8], bins[16:24, 8:16], bins[16:24, 16:24], bins[16:24, 24:], bins[24:, :8], bins[24:, 8:16], bins[24:, 16:24], bins[24:, 24:]
+    mag_cells = mag[:8, :8], mag[:8, 8:16], mag[:8, 16:24], mag[:8, 24:], mag[8:16, :8], mag[8:16, 8:16], mag[8:16, 16:24], mag[8:16, 24:], mag[16:24, :8], mag[16:24, 8:16], mag[16:24, 16:24], mag[16:24, 24:], mag[24:, :8], mag[24:, 8:16], mag[24:, 16:24], mag[24:, 24:]
     hists = [np.bincount(b.ravel(), m.ravel(), bin_n) for b, m in zip(bin_cells, mag_cells)]
-    hist = np.hstack(hists)     # hist is a 64 bit vector
+    hist = np.hstack(hists)
+    hist = hist / math.sqrt(sum(hist ** 2))
     return hist
 
 while (num<=1000):
@@ -54,7 +56,7 @@ while (num<=1000):
     if max_area != -1:
         x, y, w, h = cv2.boundingRect(contours[max_area_index])
         crop_img = res[y:y+h, x:x+w]
-        crop_img = cv2.resize(crop_img,(500, 500), interpolation = cv2.INTER_CUBIC)
+        crop_img = cv2.resize(crop_img,(32, 32), interpolation = cv2.INTER_CUBIC)
         # cv2.imshow("cropped", crop_img)
         # cv2.waitKey(0)
 

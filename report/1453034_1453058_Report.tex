@@ -1,0 +1,47 @@
+\documentclass[a4paper, 12pt]{article}
+%\usepackage{enumerate}
+\usepackage{graphicx}
+\usepackage[utf8]{vietnam} 
+\title{CTT451 - Báo cáo cuối kỳ \\ Nhận diện cử chỉ tay}
+\date{\today}
+
+\begin{document}
+
+\begin{center} 
+\large VNUHCM - Khoa học tự nhiên \\
+Công nghệ thông tin \\
+Chương trình chất lượng cao \\
+\end{center}
+\begingroup
+\let\newpage\relax
+\maketitle
+\endgroup
+\textbf{Thành viên nhóm:}
+\begin{enumerate}
+	\item 1453058: Trần Sơn Vũ
+	\item 1453034: Huỳnh Thiên Phước
+\end{enumerate}
+
+\section{Tổng quan}
+Trong xa hội hiện nay việc giao tiếp giữa người bình thường và người khuyết tật nói chung và người mất khả năng nghe nói riêng còn gặp nhiều khó khăn. Chính vì vậy chúng tôi nghiên cứu và thử nghiệm bước đầu của quá trình giải quyết vấn đề này, đó là nhận diện cử chỉ tay. Nghiên cứu của chúng tôi như sau: khi một người đứng trước camera thể hiện thủ ngữ bất kì thì nó sẽ trả về ký tự trong bảng chữ cái.
+\section{Phương pháp luận}
+Chúng tôi sẽ thực hiện những bước như sau: Đầu tiên, khi nhận được dữ liệu đầu vào từ camera chúng tôi sẽ loại nhiễu ảnh. Bước tiếp theo chúng tôi nhận diện khuôn mặt(để phân biệt khuôn mặt với tay người). Sau đó, nhận dạng da người trong ảnh rồi so sánh với khuôn mặt đã nhận dạng trước đó để loại bỏ nó. Sau đó áp dụng HoG để tạo vector đặc trưng, bỏ vào SVM để cho ra kết quả.
+\subsection{Tiền xử lý}
+Áp dụng bộ lọc Gaussian theo ảnh 1,2 để làm mờ ảnh và loại bỏ nhiễu
+\subsection{Nhận dạng khuôn mặt }
+Chúng tôi áp dụng nhận dạng khuôn mặt cơ bản của OpenCV là Haar Feature-based Cascade Classifiers. Để chương trình xử lý nhanh chúng tôi giả định chỉ có một người trước camera. vì vậy chúng tôi chỉ lấy khuôn mặt lớn nhất và phải có kích thước lớn hơn một ngưỡng mà chúng tôi đã xét trong tất cả các khuôn mặt mà nó nhận dang được.
+Mục đích dùng nhận diện khuôn mặt vì camera quay trúng khuôn mặt, và bàn tay sẽ gây nhiễu kết quả, không phân biệt được tay người và khuôn mặt. 
+\subsection{Nhận dạng màu da}
+Đầu tiên chúng tôi chuyển ảnh từ RGB sang HSV vì HSV cho chúng ta biết: H(Hue, vùng màu), S(Saturation, độ bão hòa màu), V(Value, độ sáng) sẽ giúp chúng ta dễ dàng lọc được màu từ ảnh. Để có thể tìm được ngưỡng màu phù hợp để có thể tách được da người từ ảnh đầu vào, bằng phương pháp thực nghiệm thử và sai chúng tôi đã tìm ra được thông số mà phù hợp với người Việt Nam nói riêng và người da vàng nói chung. Thông số chúng tôi sử dụng trong ngưỡng từ (0, 10, 60) đến (20, 150, 255).
+\subsection{Nhận dạng tay}
+Sau khi đã nhận dạng da người chúng tôi phát hiện ra rằng nếu nhận dạng màu da thì có thể lấy cả mặt người vì vậy chúng tôi đã nhận dạng mặt người để có thể loại bỏ mặt người ra khỏi ảnh bằng cách lấy giá trị của từng pixel mặt người thành giá trị 0 trong ảnh mà chúng tôi đã tách từ da người. Chúng ta dùng contours để xác định vùng tay và cắt nó ra. Thêm vào đó để xử lý nhanh chúng tôi tiếp tục giả định chỉ có một cánh tay vì vậy chúng tôi sẽ lấy vùng có diện tích lớn nhất và có diện tích lớn hơn một ngưỡng mà chúng tôi đã xét trong các vùng coutours đã tìm được. Để tăng độ chính xác chúng tôi đã sử dụng 1 vòng tay màu đen để dễ dàng phân biệt được giữa bàn tay với cánh tay.
+\subsection{HoG}
+
+\subsection{SVM}
+\bibliographystyle{unsrt}
+\begin{thebibliography}{}
+
+\end{thebibliography}
+
+\end{document}
+

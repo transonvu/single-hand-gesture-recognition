@@ -5,7 +5,7 @@ import math
 from svm import *
 
 SZ = 20
-bin_n = 16
+bin_n = 8
 NUMFARMECHANGE = 10
 
 cascadePath = "haarcascade_frontalface_default.xml"
@@ -47,12 +47,14 @@ def hog(img):
     gx = cv2.Sobel(img, cv2.CV_32F, 1, 0)
     gy = cv2.Sobel(img, cv2.CV_32F, 0, 1)
     mag, ang = cv2.cartToPolar(gx, gy)
-    bins = np.int32(bin_n*ang/(2*np.pi))    # quantizing binvalues in (0...16)
-    bin_cells = bins[:10,:10], bins[10:,:10], bins[:10,10:], bins[10:,10:]
-    mag_cells = mag[:10,:10], mag[10:,:10], mag[:10,10:], mag[10:,10:]
+    bins = np.int32(bin_n*ang/(2*np.pi))
+    bin_cells = bins[:8, :8], bins[:8, 8:16], bins[:8, 16:24], bins[:8, 24:], bins[8:16, :8], bins[8:16, 8:16], bins[8:16, 16:24], bins[8:16, 24:], bins[16:24, :8], bins[16:24, 8:16], bins[16:24, 16:24], bins[16:24, 24:], bins[24:, :8], bins[24:, 8:16], bins[24:, 16:24], bins[24:, 24:]
+    mag_cells = mag[:8, :8], mag[:8, 8:16], mag[:8, 16:24], mag[:8, 24:], mag[8:16, :8], mag[8:16, 8:16], mag[8:16, 16:24], mag[8:16, 24:], mag[16:24, :8], mag[16:24, 8:16], mag[16:24, 16:24], mag[16:24, 24:], mag[24:, :8], mag[24:, 8:16], mag[24:, 16:24], mag[24:, 24:]
     hists = [np.bincount(b.ravel(), m.ravel(), bin_n) for b, m in zip(bin_cells, mag_cells)]
-    hist = np.hstack(hists)     # hist is a 64 bit vector
+    hist = np.hstack(hists)
+    hist = hist / math.sqrt(sum(hist ** 2))
     return hist
+
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 result = []
@@ -92,14 +94,14 @@ while(True):
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
         crop_img = skin[y:y + h, x:x + w]
         gray_hand = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)
-        gray_hand = cv2.resize(gray_hand,(500, 500), interpolation = cv2.INTER_CUBIC)
+        gray_hand = cv2.resize(gray_hand,(32, 32), interpolation = cv2.INTER_CUBIC)
         cv2.imshow("cropped", gray_hand)
         hist = hog(gray_hand)
-        feature_vector = np.float32(hist).reshape(-1,64)
+        feature_vector = np.float32(hist).reshape(-1, 128)
         labels = svm.predict(feature_vector)
         result.append(labels[1][0][0])
         #print ('-------------', labels[1][0][0])
-    if (len(result)>=NUMFARMECHANGE):
+    if (len(result) >= NUMFARMECHANGE):
         counts=[]
         counts.append(result.count(1))
         counts.append(result.count(2))
@@ -107,7 +109,7 @@ while(True):
         counts.append(result.count(4))
         counts.append(result.count(5))
         result = counts.index(max(counts))+1
-        if max(counts)>0.7*NUMFARMECHANGE:
+        if max(counts) > 0.7 * NUMFARMECHANGE:
             print (counts,counts.index(max(counts))+1)
         else:
             print (None)
